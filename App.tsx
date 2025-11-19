@@ -24,10 +24,27 @@ const App: React.FC = () => {
 
   const loadRandomScenario = () => {
     const randomScenario = SCENARIOS[Math.floor(Math.random() * SCENARIOS.length)];
-    setBodies(randomScenario.getBodies());
+    const generatedBodies = randomScenario.getBodies();
+    
+    setBodies(generatedBodies);
     setConfig({ ...DEFAULT_CONFIG, ...randomScenario.config });
-    // Center camera nicely
-    setViewport(INITIAL_VIEWPORT);
+    
+    // Viewport positioning logic
+    let initialOffset = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+
+    // On mobile, center the camera on the heaviest body to ensure visibility
+    if (window.innerWidth < 768 && generatedBodies.length > 0) {
+        const heaviest = generatedBodies.reduce((prev, curr) => (prev.mass > curr.mass) ? prev : curr);
+        initialOffset = {
+            x: (window.innerWidth / 2) - heaviest.pos.x,
+            y: (window.innerHeight / 2) - heaviest.pos.y
+        };
+    }
+
+    setViewport({
+        offset: initialOffset,
+        zoom: 1,
+    });
   };
 
   // Load random scenario on mount for the background
@@ -81,7 +98,7 @@ const App: React.FC = () => {
     ? 'opacity-100 translate-y-0' 
     : (hasStarted && !isTransitioning && !isUIActive)
         ? 'opacity-0 translate-y-0 [&_*]:pointer-events-none' // Keep position, fade out, disable clicks
-        : 'opacity-0 translate-y-10 pointer-events-none'; // Initial hidden state
+        : 'opacity-0 translate-y-0 pointer-events-none'; // Initial hidden state (was translate-y-10)
 
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden font-sans selection:bg-cyan-500/30">

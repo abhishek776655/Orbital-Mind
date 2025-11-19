@@ -122,7 +122,7 @@ const Controls: React.FC<ControlsProps> = ({
         hidden md:flex flex-col gap-2 z-40 pointer-events-auto
         absolute bottom-8 right-8
         bg-black/80 rounded-xl border border-white/10 p-2
-        opacity-40 hover:opacity-100 transition-all duration-300
+        opacity-40 hover:opacity-100 transition-opacity duration-300
       `}>
         <button 
             onClick={handleZoomIn} 
@@ -147,12 +147,28 @@ const Controls: React.FC<ControlsProps> = ({
         </button>
       </div>
 
+      {/* --- MOBILE BACKDROP --- */}
+      {isMobileMenuOpen && (
+        <div 
+            className="fixed inset-0 bg-black/60 z-[55] md:hidden pointer-events-auto backdrop-blur-sm"
+            onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* --- SCENARIO SELECTION PANEL (Sidebar on Mobile / Float on Desktop) --- */}
       <div className={`
-        z-50 transition-all duration-300 ease-in-out pointer-events-auto
-        md:absolute md:top-6 md:right-6 md:w-64 md:h-auto md:max-h-[80vh] md:translate-x-0 md:bg-black/80 md:rounded-xl md:border md:border-white/10 md:opacity-40 md:hover:opacity-100
+        z-[60] pointer-events-auto
+        /* Mobile Styles */
         fixed inset-y-0 left-0 w-72 bg-slate-900/95 backdrop-blur-xl border-r border-white/10 shadow-2xl
+        transition-transform duration-300 ease-in-out
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+
+        /* Desktop Styles override */
+        md:absolute md:top-6 md:right-6 md:left-auto md:bottom-auto md:w-64 md:h-auto md:max-h-[80vh] 
+        md:bg-black/80 md:rounded-xl md:border md:border-white/10 
+        md:translate-x-0 
+        md:opacity-40 md:hover:opacity-100 md:transition-opacity md:duration-300
+        md:z-50
       `}>
         <div className="p-4 flex flex-col h-full">
             <div className="flex items-center justify-between mb-4 md:mb-2">
@@ -180,14 +196,6 @@ const Controls: React.FC<ControlsProps> = ({
                 ))}
             </div>
         </div>
-        
-        {/* Mobile Overlay Backdrop */}
-        {isMobileMenuOpen && (
-            <div 
-                className="fixed inset-0 bg-black/50 z-[-1] md:hidden pointer-events-auto"
-                onClick={() => setIsMobileMenuOpen(false)}
-            />
-        )}
       </div>
 
 
@@ -224,10 +232,18 @@ const Controls: React.FC<ControlsProps> = ({
 
       {/* --- MAIN CONTROLS PANEL (Bottom Sheet on Mobile / Float on Desktop) --- */}
       <div className={`
-        transition-all duration-300 ease-out z-40 pointer-events-auto
-        md:absolute md:bottom-8 md:left-1/2 md:-translate-x-1/2 md:w-[95%] md:max-w-3xl md:h-auto md:bg-black/80 md:rounded-2xl md:border md:border-white/10 md:opacity-40 md:hover:opacity-100 md:translate-y-0
+        z-40 pointer-events-auto
+        /* Mobile Styles */
         fixed bottom-0 left-0 w-full bg-slate-900/95 backdrop-blur-xl rounded-t-2xl border-t border-white/10 shadow-2xl pb-24 pt-6 px-6
+        transition-transform duration-300 ease-out
         ${isMobileConfigOpen ? 'translate-y-0' : 'translate-y-full md:translate-y-0'}
+
+        /* Desktop Styles override */
+        md:absolute md:bottom-8 md:left-1/2 md:-translate-x-1/2 md:w-[95%] md:max-w-3xl md:h-auto 
+        md:bg-black/80 md:rounded-2xl md:border md:border-white/10 
+        md:opacity-40 md:hover:opacity-100 
+        md:translate-y-0
+        md:transition-opacity md:duration-300
       `}>
         
         {/* Desktop Playback Row (Hidden on Mobile as it is in the bottom bar) */}
