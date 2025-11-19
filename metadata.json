@@ -1,0 +1,5 @@
+{
+  "name": "Orbital Mind",
+  "description": "A 2D N-body gravity simulation. Simulate planetary systems, three-body problems, and chaotic clusters with interactive mass controls.",
+  "requestFramePermissions": []
+}
