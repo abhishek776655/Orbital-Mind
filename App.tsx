@@ -2,17 +2,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Canvas from './components/Canvas';
 import Controls from './components/Controls';
-import { Body, SimulationConfig, Viewport } from './types';
-import { DEFAULT_CONFIG, INITIAL_VIEWPORT } from './constants';
-import { SCENARIOS } from './services/scenarios';
+import { Body, SimulationConfig, Viewport, InteractionMode } from './types';
+import { DEFAULT_CONFIG, INITIAL_VIEWPORT, BODY_COLORS } from './constants';
+import { SCENARIOS, Scenario } from './services/scenarios';
 import { ChevronRight, Atom, Shuffle } from 'lucide-react';
+import { createBody } from './services/physicsEngine';
 
 const App: React.FC = () => {
   const [bodies, setBodies] = useState<Body[]>([]);
+  const [initialBodies, setInitialBodies] = useState<Body[]>([]);
   const [config, setConfig] = useState<SimulationConfig>(DEFAULT_CONFIG);
   const [viewport, setViewport] = useState<Viewport>(INITIAL_VIEWPORT);
   const [isRunning, setIsRunning] = useState(true); // Start running immediately for background
   const [selectedBodyId, setSelectedBodyId] = useState<string | null>(null);
+  const [interactionMode, setInteractionMode] = useState<InteractionMode>(InteractionMode.VIEW);
+  const [creationMass, setCreationMass] = useState(100);
   
   // App State
   const [hasStarted, setHasStarted] = useState(false);
@@ -22,11 +26,21 @@ const App: React.FC = () => {
   const [isUIActive, setIsUIActive] = useState(true);
   const inactivityTimerRef = useRef<number | null>(null);
 
+  const handleLoadScenario = (scenario: Scenario) => {
+    const generatedBodies = scenario.getBodies();
+    setBodies(generatedBodies);
+    setInitialBodies(generatedBodies);
+    setConfig({ ...DEFAULT_CONFIG, ...scenario.config });
+    setIsRunning(false);
+    setSelectedBodyId(null);
+  };
+
   const loadRandomScenario = () => {
     const randomScenario = SCENARIOS[Math.floor(Math.random() * SCENARIOS.length)];
     const generatedBodies = randomScenario.getBodies();
     
     setBodies(generatedBodies);
+    setInitialBodies(generatedBodies);
     setConfig({ ...DEFAULT_CONFIG, ...randomScenario.config });
     
     // Viewport positioning logic
@@ -87,9 +101,34 @@ const App: React.FC = () => {
   };
 
   const handleReset = () => {
-    setBodies([]);
+    // Restore from initialBodies
+    if (initialBodies.length > 0) {
+        setBodies(initialBodies.map(b => ({
+            ...b,
+            // Generate new ID to force Canvas reconciliation to accept new positions
+            // otherwise it preserves the current simulation state if IDs match.
+            id: Math.random().toString(36).substr(2, 9),
+            trail: [],
+            pos: { ...b.pos },
+            vel: { ...b.vel }
+        })));
+    } else {
+        setBodies([]);
+    }
     setIsRunning(false);
     setSelectedBodyId(null);
+  };
+
+  const handleCreateBody = (pos: { x: number, y: number }, vel: { x: number, y: number }) => {
+    const color = BODY_COLORS[Math.floor(Math.random() * BODY_COLORS.length)];
+    // Random slightly varied color for visual interest if needed, but sticking to palette is safer
+    const newBody = createBody(pos, vel, creationMass, color);
+    setBodies(prev => [...prev, newBody]);
+  };
+
+  const toggleInteractionMode = () => {
+      setInteractionMode(prev => prev === InteractionMode.VIEW ? InteractionMode.CREATE : InteractionMode.VIEW);
+      setSelectedBodyId(null); // Clear selection when switching modes
   };
 
   // Helper to manage UI visibility classes
@@ -113,6 +152,9 @@ const App: React.FC = () => {
           isRunning={isRunning}
           selectedBodyId={selectedBodyId}
           onBodySelect={setSelectedBodyId}
+          interactionMode={interactionMode}
+          onBodyCreate={handleCreateBody}
+          creationMass={creationMass}
         />
       </div>
       
@@ -129,6 +171,11 @@ const App: React.FC = () => {
             selectedBodyId={selectedBodyId}
             viewport={viewport}
             setViewport={setViewport}
+            onLoadScenario={handleLoadScenario}
+            interactionMode={interactionMode}
+            onToggleMode={toggleInteractionMode}
+            creationMass={creationMass}
+            setCreationMass={setCreationMass}
         />
       </div>
 

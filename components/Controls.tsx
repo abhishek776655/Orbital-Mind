@@ -1,9 +1,9 @@
 
 import React, { useState } from 'react';
-import { Play, Pause, RotateCcw, Gauge, LayoutList, Scale, Lock, Unlock, History, Menu, ChevronUp, ChevronDown, X, Waves, Grid3X3, ZoomIn, ZoomOut, Scan } from 'lucide-react';
-import { SimulationConfig, Body, Viewport } from '../types';
+import { Play, Pause, RotateCcw, Gauge, LayoutList, Scale, Lock, Unlock, History, Menu, ChevronUp, X, Waves, Grid3X3, ZoomIn, ZoomOut, Scan, MousePointer2, PlusCircle } from 'lucide-react';
+import { SimulationConfig, Body, Viewport, InteractionMode } from '../types';
 import { SCENARIOS, Scenario } from '../services/scenarios';
-import { DEFAULT_CONFIG, MAX_TRAIL_LENGTH, MIN_ZOOM, MAX_ZOOM, INITIAL_VIEWPORT } from '../constants';
+import { MAX_TRAIL_LENGTH, MIN_ZOOM, MAX_ZOOM, INITIAL_VIEWPORT } from '../constants';
 
 interface ControlsProps {
   config: SimulationConfig;
@@ -16,6 +16,11 @@ interface ControlsProps {
   selectedBodyId: string | null;
   viewport: Viewport;
   setViewport: React.Dispatch<React.SetStateAction<Viewport>>;
+  onLoadScenario: (scenario: Scenario) => void;
+  interactionMode: InteractionMode;
+  onToggleMode: () => void;
+  creationMass: number;
+  setCreationMass: React.Dispatch<React.SetStateAction<number>>;
 }
 
 const Controls: React.FC<ControlsProps> = ({
@@ -29,6 +34,11 @@ const Controls: React.FC<ControlsProps> = ({
   selectedBodyId,
   viewport,
   setViewport,
+  onLoadScenario,
+  interactionMode,
+  onToggleMode,
+  creationMass,
+  setCreationMass,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileConfigOpen, setIsMobileConfigOpen] = useState(false);
@@ -36,9 +46,7 @@ const Controls: React.FC<ControlsProps> = ({
   const selectedBody = bodies.find(b => b.id === selectedBodyId);
 
   const loadScenario = (scenario: Scenario) => {
-    setBodies(scenario.getBodies());
-    setConfig(prev => ({ ...prev, ...DEFAULT_CONFIG, ...scenario.config }));
-    setIsRunning(false); 
+    onLoadScenario(scenario);
     setIsMobileMenuOpen(false); // Close menu on mobile after selection
   };
 
@@ -199,9 +207,10 @@ const Controls: React.FC<ControlsProps> = ({
       </div>
 
 
-      {/* --- MOBILE BOTTOM ACTION BAR (Always Visible on Mobile) --- */}
-      <div className="md:hidden fixed bottom-0 left-0 w-full bg-slate-900/90 backdrop-blur-md border-t border-white/10 p-4 z-50 flex items-center justify-between pb-6 pointer-events-auto">
-         <div className="flex items-center gap-4">
+      {/* --- MOBILE FLOATING ACTIONS --- */}
+      
+      {/* Playback Controls - Bottom Left */}
+      <div className="md:hidden absolute bottom-6 left-4 z-50 pointer-events-auto flex items-center gap-2 bg-slate-900/80 backdrop-blur-md p-2 rounded-full border border-white/10 shadow-xl">
             <button
                 onClick={() => setIsRunning(!isRunning)}
                 className={`p-3 rounded-full transition-all duration-200 flex items-center justify-center shadow-lg active:scale-95 ${
@@ -218,24 +227,35 @@ const Controls: React.FC<ControlsProps> = ({
             >
                 <RotateCcw size={18} />
             </button>
-         </div>
-
-         <button 
-            onClick={() => setIsMobileConfigOpen(!isMobileConfigOpen)}
-            className="flex flex-col items-center gap-1 text-slate-400 hover:text-white"
-         >
-             {isMobileConfigOpen ? <ChevronDown size={24} /> : <ChevronUp size={24} />}
-             <span className="text-[10px] uppercase font-bold tracking-wider">Config</span>
-         </button>
+             {/* Mode Toggle Mobile */}
+            <div className="w-px h-8 bg-white/10 mx-1"></div>
+            <button
+                onClick={onToggleMode}
+                className={`p-3 rounded-full transition-colors shadow-lg active:scale-95 ${
+                    interactionMode === InteractionMode.CREATE 
+                    ? 'bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/50' 
+                    : 'bg-white/5 text-slate-400'
+                }`}
+            >
+                {interactionMode === InteractionMode.CREATE ? <PlusCircle size={20} /> : <MousePointer2 size={20} />}
+            </button>
       </div>
+
+      {/* Config Trigger - Bottom Right */}
+      <button 
+        onClick={() => setIsMobileConfigOpen(true)}
+        className={`md:hidden absolute bottom-6 right-4 z-50 pointer-events-auto p-4 bg-slate-900/90 backdrop-blur-md text-white rounded-full border border-white/10 shadow-xl transition-all duration-300 active:scale-95 ${isMobileConfigOpen ? 'opacity-0 translate-y-10' : 'opacity-100 translate-y-0'}`}
+      >
+          <ChevronUp size={24} />
+      </button>
 
 
       {/* --- MAIN CONTROLS PANEL (Bottom Sheet on Mobile / Float on Desktop) --- */}
       <div className={`
-        z-40 pointer-events-auto
+        z-[60] pointer-events-auto
         /* Mobile Styles */
-        fixed bottom-0 left-0 w-full bg-slate-900/95 backdrop-blur-xl rounded-t-2xl border-t border-white/10 shadow-2xl pb-24 pt-6 px-6
-        transition-transform duration-300 ease-out
+        fixed bottom-0 left-0 w-full bg-slate-900/95 backdrop-blur-xl rounded-t-3xl border-t border-white/10 shadow-2xl 
+        transition-transform duration-300 ease-in-out
         ${isMobileConfigOpen ? 'translate-y-0' : 'translate-y-full md:translate-y-0'}
 
         /* Desktop Styles override */
@@ -246,261 +266,299 @@ const Controls: React.FC<ControlsProps> = ({
         md:transition-opacity md:duration-300
       `}>
         
-        {/* Desktop Playback Row (Hidden on Mobile as it is in the bottom bar) */}
-        <div className="hidden md:flex items-center justify-between mb-6">
-            <div className="flex items-center gap-4">
-                <button
-                    onClick={() => setIsRunning(!isRunning)}
-                    className={`p-3 rounded-full transition-all duration-200 flex items-center justify-center shadow-lg active:scale-95 ${
-                    isRunning 
-                        ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 ring-1 ring-amber-500/50' 
-                        : 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 ring-1 ring-cyan-500/50'
-                    }`}
-                >
-                    {isRunning ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-1" />}
-                </button>
-                <button
-                    onClick={onReset}
-                    className="p-3 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors shadow-lg active:scale-95"
-                    title="Reset"
-                >
-                    <RotateCcw size={20} />
-                </button>
-                
-                <div className="h-8 w-px bg-white/10 mx-2"></div>
+        {/* Mobile Header (Close Button) */}
+        <div className="md:hidden flex items-center justify-between px-6 pt-5 pb-2 border-b border-white/5">
+            <span className="text-sm font-bold text-slate-300 uppercase tracking-wider">Configuration</span>
+            <button 
+                onClick={() => setIsMobileConfigOpen(false)}
+                className="p-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors"
+            >
+                <X size={20} />
+            </button>
+        </div>
+        
+        <div className="p-6 pb-10 md:p-6 md:pb-6">
+            {/* Desktop Playback Row (Hidden on Mobile) */}
+            <div className="hidden md:flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={() => setIsRunning(!isRunning)}
+                        className={`p-3 rounded-full transition-all duration-200 flex items-center justify-center shadow-lg active:scale-95 ${
+                        isRunning 
+                            ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 ring-1 ring-amber-500/50' 
+                            : 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 ring-1 ring-cyan-500/50'
+                        }`}
+                    >
+                        {isRunning ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-1" />}
+                    </button>
+                    <button
+                        onClick={onReset}
+                        className="p-3 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors shadow-lg active:scale-95"
+                        title="Reset"
+                    >
+                        <RotateCcw size={20} />
+                    </button>
+                    
+                    <div className="h-8 w-px bg-white/10 mx-2"></div>
+                    
+                    <button
+                        onClick={onToggleMode}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-200 font-bold text-xs uppercase tracking-wider ${
+                            interactionMode === InteractionMode.CREATE 
+                            ? 'bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/50 hover:bg-purple-500/30' 
+                            : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'
+                        }`}
+                    >
+                        {interactionMode === InteractionMode.CREATE ? <PlusCircle size={18} /> : <MousePointer2 size={18} />}
+                        {interactionMode === InteractionMode.CREATE ? 'Create Mode' : 'View Mode'}
+                    </button>
 
-                <div className="flex flex-col">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</span>
-                    <span className={`font-mono text-sm font-medium ${isRunning ? 'text-cyan-400' : 'text-amber-400'}`}>
-                        {isRunning ? 'RUNNING' : 'PAUSED'}
-                    </span>
+                    <div className="h-8 w-px bg-white/10 mx-2"></div>
+
+                    <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</span>
+                        <span className={`font-mono text-sm font-medium ${isRunning ? 'text-cyan-400' : 'text-amber-400'}`}>
+                            {isRunning ? 'RUNNING' : 'PAUSED'}
+                        </span>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        {/* Controls Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-            
-            {/* Left Column: Physics, Trails & Waves */}
-            <div className="flex flex-col gap-5">
-                {/* Mobile View Controls (Only visible on mobile) */}
-                <div className="md:hidden flex items-center justify-between bg-white/5 p-2 rounded-lg border border-white/5 mb-2">
-                     <span className="text-xs font-bold text-slate-400 uppercase ml-2">Zoom View</span>
-                     <div className="flex items-center gap-2">
-                        <button onClick={handleZoomIn} className="p-2 bg-white/10 rounded text-cyan-400"><ZoomIn size={16} /></button>
-                        <button onClick={handleResetZoom} className="p-2 bg-white/10 rounded text-slate-400"><Scan size={16} /></button>
-                        <button onClick={handleZoomOut} className="p-2 bg-white/10 rounded text-cyan-400"><ZoomOut size={16} /></button>
-                     </div>
-                </div>
-
-                {/* Speed Slider */}
-                <div className="flex flex-col gap-3">
-                    <div className="flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider">
-                        <span className="flex items-center gap-2 text-cyan-500">
-                            <Gauge size={16} /> 
-                            Sim Speed
-                        </span>
-                        <span className="font-mono text-white bg-white/10 px-1.5 py-0.5 rounded">
-                            {config.timeScale.toFixed(1)}x
-                        </span>
-                    </div>
-                    <div className="relative flex items-center h-8">
-                         <input
-                            type="range"
-                            min="0.1"
-                            max="50.0"
-                            step="0.1"
-                            value={config.timeScale}
-                            onChange={(e) => setConfig(prev => ({ ...prev, timeScale: parseFloat(e.target.value) }))}
-                            className={`${sliderClass} w-full`}
-                        />
-                    </div>
-                </div>
-
-                {/* Trails Toggles & Length */}
-                <div className="flex flex-col gap-3">
-                     <div className="flex items-center justify-between gap-4 mb-1">
-                        <div className="flex items-center gap-2 text-emerald-500 text-xs font-bold uppercase tracking-wider">
-                            <History size={16} />
-                            Trails
+            {/* Controls Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                
+                {/* Left Column: Physics, Trails & Waves */}
+                <div className="flex flex-col gap-5">
+                    {/* Mobile View Controls (Only visible on mobile) */}
+                    <div className="md:hidden flex items-center justify-between bg-white/5 p-2 rounded-lg border border-white/5 mb-2">
+                        <span className="text-xs font-bold text-slate-400 uppercase ml-2">Zoom View</span>
+                        <div className="flex items-center gap-2">
+                            <button onClick={handleZoomIn} className="p-2 bg-white/10 rounded text-cyan-400"><ZoomIn size={16} /></button>
+                            <button onClick={handleResetZoom} className="p-2 bg-white/10 rounded text-slate-400"><Scan size={16} /></button>
+                            <button onClick={handleZoomOut} className="p-2 bg-white/10 rounded text-cyan-400"><ZoomOut size={16} /></button>
                         </div>
-                        {/* Fade Toggle */}
-                        <div className={`flex items-center gap-2 transition-opacity ${!config.showTrails ? 'opacity-40' : ''}`}>
-                             <span className="text-[10px] font-bold text-slate-500 uppercase">Fade</span>
+                    </div>
+
+                    {/* Speed Slider */}
+                    <div className="flex flex-col gap-3">
+                        <div className="flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider">
+                            <span className="flex items-center gap-2 text-cyan-500">
+                                <Gauge size={16} /> 
+                                Sim Speed
+                            </span>
+                            <span className="font-mono text-white bg-white/10 px-1.5 py-0.5 rounded">
+                                {config.timeScale.toFixed(1)}x
+                            </span>
+                        </div>
+                        <div className="relative flex items-center h-8">
+                            <input
+                                type="range"
+                                min="0.1"
+                                max="50.0"
+                                step="0.1"
+                                value={config.timeScale}
+                                onChange={(e) => setConfig(prev => ({ ...prev, timeScale: parseFloat(e.target.value) }))}
+                                className={`${sliderClass} w-full`}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Trails Toggles & Length */}
+                    <div className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between gap-4 mb-1">
+                            <div className="flex items-center gap-2 text-emerald-500 text-xs font-bold uppercase tracking-wider">
+                                <History size={16} />
+                                Trails
+                            </div>
+                            {/* Fade Toggle */}
+                            <div className={`flex items-center gap-2 transition-opacity ${!config.showTrails ? 'opacity-40' : ''}`}>
+                                <span className="text-[10px] font-bold text-slate-500 uppercase">Fade</span>
+                                <button
+                                    disabled={!config.showTrails}
+                                    onClick={() => setConfig(prev => ({ ...prev, trailFade: !prev.trailFade }))}
+                                    className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+                                        config.trailFade ? 'bg-emerald-500/20 ring-1 ring-emerald-500/50' : 'bg-white/10'
+                                    }`}
+                                >
+                                    <span className={`inline-block h-2.5 w-2.5 transform rounded-full bg-emerald-400 transition-transform ml-0.5 ${
+                                        config.trailFade ? 'translate-x-3' : 'translate-x-0 opacity-50 grayscale'
+                                    }`} />
+                                </button>
+                            </div>
+                            {/* On/Off */}
                             <button
-                                disabled={!config.showTrails}
-                                onClick={() => setConfig(prev => ({ ...prev, trailFade: !prev.trailFade }))}
-                                className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
-                                    config.trailFade ? 'bg-emerald-500/20 ring-1 ring-emerald-500/50' : 'bg-white/10'
+                                onClick={() => setConfig(prev => ({ ...prev, showTrails: !prev.showTrails }))}
+                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                                    config.showTrails ? 'bg-emerald-500/20 ring-1 ring-emerald-500/50' : 'bg-white/10'
                                 }`}
                             >
-                                <span className={`inline-block h-2.5 w-2.5 transform rounded-full bg-emerald-400 transition-transform ml-0.5 ${
-                                    config.trailFade ? 'translate-x-3' : 'translate-x-0 opacity-50 grayscale'
+                                <span className={`inline-block h-3 w-3 transform rounded-full bg-emerald-400 transition-transform ml-1 ${
+                                    config.showTrails ? 'translate-x-4' : 'translate-x-0 opacity-50 grayscale'
                                 }`} />
                             </button>
                         </div>
-                        {/* On/Off */}
-                        <button
-                            onClick={() => setConfig(prev => ({ ...prev, showTrails: !prev.showTrails }))}
-                             className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                                config.showTrails ? 'bg-emerald-500/20 ring-1 ring-emerald-500/50' : 'bg-white/10'
-                            }`}
-                        >
-                            <span className={`inline-block h-3 w-3 transform rounded-full bg-emerald-400 transition-transform ml-1 ${
-                                config.showTrails ? 'translate-x-4' : 'translate-x-0 opacity-50 grayscale'
-                            }`} />
-                        </button>
-                     </div>
-                     {/* Trail Length Slider */}
-                     <div className={`relative flex items-center h-8 transition-opacity duration-300 ${!config.showTrails ? 'opacity-40 pointer-events-none' : ''}`}>
-                         <input
-                            type="range"
-                            min="0"
-                            max={MAX_TRAIL_LENGTH}
-                            step="50"
-                            value={config.trailLength}
-                            disabled={!config.showTrails || !config.trailFade}
-                            onChange={(e) => setConfig(prev => ({ ...prev, trailLength: parseInt(e.target.value) }))}
-                            className={`${sliderClass} w-full`}
-                        />
-                    </div>
-                </div>
-
-                {/* Spacetime / Gravity Waves (Moved to Left Column) */}
-                <div className="flex flex-col gap-3 p-3 rounded-lg bg-white/5 border border-white/5">
-                     <div className="flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider">
-                        <span className="flex items-center gap-2 text-indigo-400">
-                            <Waves size={16} /> 
-                            Spacetime & Waves
-                        </span>
-                         <button
-                            onClick={() => setConfig(prev => ({ ...prev, showGrid: !prev.showGrid }))}
-                            className={`p-1 rounded transition-colors ${config.showGrid ? 'text-cyan-400 bg-cyan-900/30' : 'text-slate-600 bg-white/5'}`}
-                            title="Toggle Grid"
-                        >
-                            <Grid3X3 size={16} />
-                        </button>
-                    </div>
-                    
-                    <div className={`flex flex-col gap-2 transition-opacity duration-300 ${!config.showGrid ? 'opacity-40 pointer-events-none grayscale' : ''}`}>
-                         <div className="flex items-center gap-4">
-                             <span className="text-[10px] font-medium text-slate-500 w-16 text-right uppercase tracking-wide">Amplitude</span>
-                             <input
+                        {/* Trail Length Slider */}
+                        <div className={`relative flex items-center h-8 transition-opacity duration-300 ${!config.showTrails ? 'opacity-40 pointer-events-none' : ''}`}>
+                            <input
                                 type="range"
                                 min="0"
-                                max="20"
-                                step="0.5"
-                                value={config.waveAmplitude}
-                                onChange={(e) => setConfig(prev => ({ ...prev, waveAmplitude: parseFloat(e.target.value) }))}
-                                className={`${sliderClass} flex-1`}
+                                max={MAX_TRAIL_LENGTH}
+                                step="50"
+                                value={config.trailLength}
+                                disabled={!config.showTrails || !config.trailFade}
+                                onChange={(e) => setConfig(prev => ({ ...prev, trailLength: parseInt(e.target.value) }))}
+                                className={`${sliderClass} w-full`}
                             />
-                         </div>
-                         <div className="flex items-center gap-4">
-                             <span className="text-[10px] font-medium text-slate-500 w-16 text-right uppercase tracking-wide">Freq</span>
-                             <input
-                                type="range"
-                                min="0.01"
-                                max="0.1"
-                                step="0.005"
-                                value={config.waveFrequency}
-                                onChange={(e) => setConfig(prev => ({ ...prev, waveFrequency: parseFloat(e.target.value) }))}
-                                className={`${sliderClass} flex-1`}
-                            />
-                         </div>
+                        </div>
+                    </div>
+
+                    {/* Spacetime / Gravity Waves (Moved to Left Column) */}
+                    <div className="flex flex-col gap-3 p-3 rounded-lg bg-white/5 border border-white/5">
+                        <div className="flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider">
+                            <span className="flex items-center gap-2 text-indigo-400">
+                                <Waves size={16} /> 
+                                Spacetime & Waves
+                            </span>
+                            <button
+                                onClick={() => setConfig(prev => ({ ...prev, showGrid: !prev.showGrid }))}
+                                className={`p-1 rounded transition-colors ${config.showGrid ? 'text-cyan-400 bg-cyan-900/30' : 'text-slate-600 bg-white/5'}`}
+                                title="Toggle Grid"
+                            >
+                                <Grid3X3 size={16} />
+                            </button>
+                        </div>
+                        
+                        <div className={`flex flex-col gap-2 transition-opacity duration-300 ${!config.showGrid ? 'opacity-40 pointer-events-none grayscale' : ''}`}>
+                            <div className="flex items-center gap-4">
+                                <span className="text-[10px] font-medium text-slate-500 w-16 text-right uppercase tracking-wide">Amplitude</span>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="20"
+                                    step="0.5"
+                                    value={config.waveAmplitude}
+                                    onChange={(e) => setConfig(prev => ({ ...prev, waveAmplitude: parseFloat(e.target.value) }))}
+                                    className={`${sliderClass} flex-1`}
+                                />
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <span className="text-[10px] font-medium text-slate-500 w-16 text-right uppercase tracking-wide">Freq</span>
+                                <input
+                                    type="range"
+                                    min="0.01"
+                                    max="0.1"
+                                    step="0.005"
+                                    value={config.waveFrequency}
+                                    onChange={(e) => setConfig(prev => ({ ...prev, waveFrequency: parseFloat(e.target.value) }))}
+                                    className={`${sliderClass} flex-1`}
+                                />
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            {/* Right Column: Body Selection & Properties */}
-            <div className="flex flex-col gap-5">
-                {/* Selected Body Controls */}
-                <div className={`flex flex-col gap-3 transition-all duration-300 ${selectedBody ? 'opacity-100' : 'opacity-40 grayscale'}`}>
-                    <div className="flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider">
-                        <span className="flex items-center gap-2 text-purple-400">
-                            <Scale size={16} /> 
-                            Body Properties
-                        </span>
-                         <div className="flex items-center gap-3">
-                            {selectedBody && (
-                                <span className="text-[10px] font-bold text-slate-500 uppercase">
-                                    ANCHOR
-                                </span>
-                            )}
-                            <button
-                                onClick={toggleSelectedBodyFixed}
+                {/* Right Column: Body Selection & Properties */}
+                <div className="flex flex-col gap-5">
+                    {/* Selected Body Controls OR New Body Controls */}
+                    <div className={`flex flex-col gap-3 transition-all duration-300 ${selectedBody || interactionMode === InteractionMode.CREATE ? 'opacity-100' : 'opacity-40 grayscale'}`}>
+                        <div className="flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider">
+                            <span className={`flex items-center gap-2 ${interactionMode === InteractionMode.CREATE ? 'text-purple-400' : 'text-purple-400'}`}>
+                                {interactionMode === InteractionMode.CREATE && !selectedBody ? <PlusCircle size={16} /> : <Scale size={16} />} 
+                                {interactionMode === InteractionMode.CREATE && !selectedBody ? 'New Body Settings' : 'Body Properties'}
+                            </span>
+                            <div className="flex items-center gap-3">
+                                {selectedBody && (
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase">
+                                        ANCHOR
+                                    </span>
+                                )}
+                                <button
+                                    onClick={toggleSelectedBodyFixed}
+                                    disabled={!selectedBody}
+                                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide transition-all border min-w-[74px] justify-center ${
+                                        selectedBody?.isFixed 
+                                        ? 'bg-purple-500/20 border-purple-500/50 text-purple-300 shadow-[0_0_10px_-4px_rgba(168,85,247,0.5)]' 
+                                        : (interactionMode === InteractionMode.CREATE && !selectedBody) ? 'opacity-0 pointer-events-none' : 'bg-slate-800/50 border-white/10 text-slate-400 hover:bg-white/5'
+                                    }`}
+                                >
+                                    {selectedBody?.isFixed ? <Lock size={11} /> : <Unlock size={11} />}
+                                    {selectedBody?.isFixed ? 'LOCKED' : 'FREE'}
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {/* Mass Slider */}
+                        <div className="flex items-center gap-3 h-8">
+                            <span className="text-[10px] font-medium text-slate-500 w-14 text-right uppercase tracking-wide">Mass</span>
+                            <input
+                                type="range"
+                                min="1"
+                                max="1000000"
+                                step="1"
+                                disabled={!selectedBody && interactionMode !== InteractionMode.CREATE}
+                                value={selectedBody ? selectedBody.mass : creationMass}
+                                onChange={(e) => {
+                                    const val = parseFloat(e.target.value);
+                                    if (selectedBody) updateSelectedBodyMass(val);
+                                    else setCreationMass(val);
+                                }}
+                                className={`${sliderClass} flex-1`}
+                            />
+                            <input 
+                                type="number"
+                                min="0.1"
+                                max="1000000"
+                                step="any"
+                                disabled={!selectedBody && interactionMode !== InteractionMode.CREATE}
+                                value={selectedBody ? selectedBody.mass : creationMass}
+                                onChange={(e) => {
+                                    const val = parseFloat(e.target.value);
+                                    if (!isNaN(val)) {
+                                        if (selectedBody) updateSelectedBodyMass(val);
+                                        else setCreationMass(val);
+                                    }
+                                }}
+                                className="font-mono text-xs text-white bg-white/10 border border-white/20 px-1.5 py-0.5 rounded w-16 text-center focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-all appearance-none"
+                            />
+                        </div>
+
+                        {/* Density Slider (Only for selected, assume standard density for creation for simplicity or add state) */}
+                        <div className={`flex items-center gap-3 h-8 ${(!selectedBody && interactionMode === InteractionMode.CREATE) ? 'opacity-50 pointer-events-none' : ''}`}>
+                            <span className="text-[10px] font-medium text-slate-500 w-14 text-right uppercase tracking-wide">Density</span>
+                            <input
+                                type="range"
+                                min="0.1"
+                                max="10"
+                                step="0.1"
                                 disabled={!selectedBody}
-                                className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide transition-all border min-w-[74px] justify-center ${
-                                    selectedBody?.isFixed 
-                                    ? 'bg-purple-500/20 border-purple-500/50 text-purple-300 shadow-[0_0_10px_-4px_rgba(168,85,247,0.5)]' 
-                                    : 'bg-slate-800/50 border-white/10 text-slate-400 hover:bg-white/5'
-                                }`}
-                            >
-                                {selectedBody?.isFixed ? <Lock size={11} /> : <Unlock size={11} />}
-                                {selectedBody?.isFixed ? 'LOCKED' : 'FREE'}
-                            </button>
-                         </div>
-                    </div>
-                    
-                    {/* Mass Slider */}
-                    <div className="flex items-center gap-3 h-8">
-                        <span className="text-[10px] font-medium text-slate-500 w-14 text-right uppercase tracking-wide">Mass</span>
-                        <input
-                            type="range"
-                            min="1"
-                            max="1000000"
-                            step="1"
-                            disabled={!selectedBody}
-                            value={selectedBody ? selectedBody.mass : 100}
-                            onChange={(e) => updateSelectedBodyMass(parseFloat(e.target.value))}
-                            className={`${sliderClass} flex-1`}
-                        />
-                         <input 
-                            type="number"
-                            min="0.1"
-                            max="1000000"
-                            step="any"
-                            disabled={!selectedBody}
-                            value={selectedBody ? selectedBody.mass : ''}
-                            onChange={(e) => {
-                                const val = parseFloat(e.target.value);
-                                if (!isNaN(val)) {
-                                    updateSelectedBodyMass(val);
-                                }
-                            }}
-                            className="font-mono text-xs text-white bg-white/10 border border-white/20 px-1.5 py-0.5 rounded w-16 text-center focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-all appearance-none"
-                        />
-                    </div>
+                                value={selectedBody ? (selectedBody.density || 1) : 1}
+                                onChange={(e) => updateSelectedBodyDensity(parseFloat(e.target.value))}
+                                className={`${sliderClass} flex-1`}
+                            />
+                            <input 
+                                type="number"
+                                min="0.1"
+                                max="50"
+                                step="0.1"
+                                disabled={!selectedBody}
+                                value={selectedBody ? (selectedBody.density || 1) : ''}
+                                onChange={(e) => {
+                                    const val = parseFloat(e.target.value);
+                                    if (!isNaN(val)) {
+                                        updateSelectedBodyDensity(val);
+                                    }
+                                }}
+                                className="font-mono text-xs text-white bg-white/10 border border-white/20 px-1.5 py-0.5 rounded w-16 text-center focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-all appearance-none"
+                            />
+                        </div>
+                        
+                        {interactionMode === InteractionMode.CREATE && !selectedBody && (
+                            <div className="text-[10px] text-slate-500 text-center mt-2 italic">
+                                Drag on canvas to throw new body
+                            </div>
+                        )}
 
-                    {/* Density Slider */}
-                    <div className="flex items-center gap-3 h-8">
-                         <span className="text-[10px] font-medium text-slate-500 w-14 text-right uppercase tracking-wide">Density</span>
-                         <input
-                            type="range"
-                            min="0.1"
-                            max="10"
-                            step="0.1"
-                            disabled={!selectedBody}
-                            value={selectedBody ? (selectedBody.density || 1) : 1}
-                            onChange={(e) => updateSelectedBodyDensity(parseFloat(e.target.value))}
-                            className={`${sliderClass} flex-1`}
-                        />
-                         <input 
-                            type="number"
-                            min="0.1"
-                            max="50"
-                            step="0.1"
-                            disabled={!selectedBody}
-                            value={selectedBody ? (selectedBody.density || 1) : ''}
-                            onChange={(e) => {
-                                const val = parseFloat(e.target.value);
-                                if (!isNaN(val)) {
-                                    updateSelectedBodyDensity(val);
-                                }
-                            }}
-                            className="font-mono text-xs text-white bg-white/10 border border-white/20 px-1.5 py-0.5 rounded w-16 text-center focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-all appearance-none"
-                        />
                     </div>
-
                 </div>
             </div>
         </div>

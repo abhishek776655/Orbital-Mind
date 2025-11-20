@@ -1,7 +1,7 @@
 
 import React, { useRef, useEffect, useCallback } from 'react';
-import { Body, Viewport, SimulationConfig, Vector2 } from '../types';
-import { SUB_STEPS } from '../constants';
+import { Body, Viewport, SimulationConfig, Vector2, InteractionMode } from '../types';
+import { SUB_STEPS, MIN_ZOOM, MAX_ZOOM } from '../constants';
 import { updatePhysics } from '../services/physicsEngine';
 
 interface CanvasProps {
@@ -13,6 +13,9 @@ interface CanvasProps {
   isRunning: boolean;
   selectedBodyId: string | null;
   onBodySelect: (id: string | null) => void;
+  interactionMode: InteractionMode;
+  onBodyCreate: (pos: Vector2, vel: Vector2) => void;
+  creationMass: number;
 }
 
 const Canvas: React.FC<CanvasProps> = ({
@@ -24,14 +27,29 @@ const Canvas: React.FC<CanvasProps> = ({
   isRunning,
   selectedBodyId,
   onBodySelect,
+  interactionMode,
+  onBodyCreate,
+  creationMass,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const requestRef = useRef<number>(0);
   const bodiesRef = useRef<Body[]>(bodies);
+  
+  // Input Refs
   const isDraggingRef = useRef(false);
   const isPanRef = useRef(false);
   const lastMousePosRef = useRef<Vector2>({ x: 0, y: 0 });
   const startMousePosRef = useRef<Vector2>({ x: 0, y: 0 });
+  
+  // Touch Zoom/Pan Refs
+  const lastTouchDistanceRef = useRef<number>(0);
+  const lastPinchCenterRef = useRef<Vector2>({ x: 0, y: 0 });
+
+  // Creation Refs
+  const isCreatingRef = useRef(false);
+  const creationStartRef = useRef<Vector2>({ x: 0, y: 0 });
+  const creationEndRef = useRef<Vector2>({ x: 0, y: 0 });
+
   const timeRef = useRef<number>(0); // Track simulation time for wave animation
 
   // Intelligent State Reconciliation
@@ -270,10 +288,50 @@ const Canvas: React.FC<CanvasProps> = ({
       ctx.shadowBlur = 0;
     });
 
+    // 7. Draw Creation Vector (if creating)
+    if (interactionMode === InteractionMode.CREATE && isCreatingRef.current) {
+        const start = creationStartRef.current; // World Coords
+        const end = creationEndRef.current;     // World Coords
+        
+        // Convert World to Screen for calculation (optional, but easier for lines relative to zoom)
+        // Actually we are inside transformed context, so we use world coords.
+        
+        // Draw Ghost Body
+        const tempRadius = Math.max(3, Math.sqrt(creationMass));
+        ctx.beginPath();
+        ctx.arc(start.x, start.y, tempRadius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2 / viewport.zoom;
+        ctx.fill();
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Draw Vector Line
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = 3 / viewport.zoom;
+        ctx.stroke();
+
+        // Draw Arrowhead
+        const angle = Math.atan2(end.y - start.y, end.x - start.x);
+        const headLen = 10 / viewport.zoom;
+        ctx.beginPath();
+        ctx.moveTo(end.x, end.y);
+        ctx.lineTo(end.x - headLen * Math.cos(angle - Math.PI / 6), end.y - headLen * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(end.x - headLen * Math.cos(angle + Math.PI / 6), end.y - headLen * Math.sin(angle + Math.PI / 6));
+        ctx.lineTo(end.x, end.y);
+        ctx.fillStyle = 'white';
+        ctx.fill();
+    }
+
     ctx.restore();
 
     requestRef.current = requestAnimationFrame(render);
-  }, [config, isRunning, viewport, selectedBodyId]);
+  }, [config, isRunning, viewport, selectedBodyId, interactionMode, creationMass]);
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(render);
@@ -304,48 +362,78 @@ const Canvas: React.FC<CanvasProps> = ({
   };
 
   const handleStart = (clientX: number, clientY: number) => {
-    isDraggingRef.current = true;
-    isPanRef.current = false;
-    lastMousePosRef.current = { x: clientX, y: clientY };
+    const worldPos = getWorldPos(clientX, clientY);
     startMousePosRef.current = { x: clientX, y: clientY };
+
+    if (interactionMode === InteractionMode.CREATE) {
+        isCreatingRef.current = true;
+        creationStartRef.current = worldPos;
+        creationEndRef.current = worldPos;
+    } else {
+        isDraggingRef.current = true;
+        isPanRef.current = false;
+        lastMousePosRef.current = { x: clientX, y: clientY };
+    }
   };
 
   const handleMove = (clientX: number, clientY: number) => {
-    if (isDraggingRef.current) {
-      const dx = clientX - lastMousePosRef.current.x;
-      const dy = clientY - lastMousePosRef.current.y;
-      
-      if (Math.abs(clientX - startMousePosRef.current.x) > 5 || Math.abs(clientY - startMousePosRef.current.y) > 5) {
-        isPanRef.current = true;
-      }
+    const worldPos = getWorldPos(clientX, clientY);
+    
+    if (interactionMode === InteractionMode.CREATE) {
+        if (isCreatingRef.current) {
+            creationEndRef.current = worldPos;
+        }
+    } else {
+        if (isDraggingRef.current) {
+          const dx = clientX - lastMousePosRef.current.x;
+          const dy = clientY - lastMousePosRef.current.y;
+          
+          if (Math.abs(clientX - startMousePosRef.current.x) > 5 || Math.abs(clientY - startMousePosRef.current.y) > 5) {
+            isPanRef.current = true;
+          }
 
-      setViewport((prev) => ({
-        ...prev,
-        offset: { x: prev.offset.x + dx, y: prev.offset.y + dy },
-      }));
-      lastMousePosRef.current = { x: clientX, y: clientY };
+          setViewport((prev) => ({
+            ...prev,
+            offset: { x: prev.offset.x + dx, y: prev.offset.y + dy },
+          }));
+          lastMousePosRef.current = { x: clientX, y: clientY };
+        }
     }
   };
 
   const handleEnd = (clientX: number, clientY: number) => {
-    isDraggingRef.current = false;
-
-    if (!isPanRef.current) {
-      const clickPos = getWorldPos(clientX, clientY);
-      
-      let clickedId: string | null = null;
-      // Hit testing
-      for (let i = bodiesRef.current.length - 1; i >= 0; i--) {
-        const b = bodiesRef.current[i];
-        const dist = Math.sqrt(
-          Math.pow(clickPos.x - b.pos.x, 2) + Math.pow(clickPos.y - b.pos.y, 2)
-        );
-        if (dist <= Math.max(b.radius * 1.5, 15 / viewport.zoom)) { 
-          clickedId = b.id;
-          break;
+    if (interactionMode === InteractionMode.CREATE) {
+        if (isCreatingRef.current) {
+            isCreatingRef.current = false;
+            
+            // Calculate Velocity based on drag vector
+            const velocityScale = 0.05;
+            const vx = (creationEndRef.current.x - creationStartRef.current.x) * velocityScale;
+            const vy = (creationEndRef.current.y - creationStartRef.current.y) * velocityScale;
+            
+            // Even a click (zero drag) creates a body with 0 velocity
+            onBodyCreate(creationStartRef.current, { x: vx, y: vy });
         }
-      }
-      onBodySelect(clickedId);
+    } else {
+        isDraggingRef.current = false;
+
+        if (!isPanRef.current) {
+          const clickPos = getWorldPos(clientX, clientY);
+          
+          let clickedId: string | null = null;
+          // Hit testing
+          for (let i = bodiesRef.current.length - 1; i >= 0; i--) {
+            const b = bodiesRef.current[i];
+            const dist = Math.sqrt(
+              Math.pow(clickPos.x - b.pos.x, 2) + Math.pow(clickPos.y - b.pos.y, 2)
+            );
+            if (dist <= Math.max(b.radius * 1.5, 15 / viewport.zoom)) { 
+              clickedId = b.id;
+              break;
+            }
+          }
+          onBodySelect(clickedId);
+        }
     }
   };
 
@@ -353,21 +441,97 @@ const Canvas: React.FC<CanvasProps> = ({
   const handleMouseMove = (e: React.MouseEvent) => handleMove(e.clientX, e.clientY);
   const handleMouseUp = (e: React.MouseEvent) => handleEnd(e.clientX, e.clientY);
 
+  // --- MULTI-TOUCH GESTURES (Pinch Zoom & Pan) ---
+  
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 1) {
       handleStart(e.touches[0].clientX, e.touches[0].clientY);
+    } else if (e.touches.length === 2) {
+      // START PINCH
+      // Reset single-finger states
+      isDraggingRef.current = false;
+      isCreatingRef.current = false;
+      isPanRef.current = true; // Prevent click/select on release
+      
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      const cx = (t1.clientX + t2.clientX) / 2;
+      const cy = (t1.clientY + t2.clientY) / 2;
+      
+      lastTouchDistanceRef.current = dist;
+      lastPinchCenterRef.current = { x: cx, y: cy };
     }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (e.touches.length === 1) {
       handleMove(e.touches[0].clientX, e.touches[0].clientY);
+    } else if (e.touches.length === 2) {
+      // MOVE PINCH
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      const cx = (t1.clientX + t2.clientX) / 2;
+      const cy = (t1.clientY + t2.clientY) / 2;
+      
+      if (lastTouchDistanceRef.current > 0) {
+          setViewport(prev => {
+            const oldZoom = prev.zoom;
+            const oldOffset = prev.offset;
+            
+            // 1. Zoom Scale
+            const scale = dist / lastTouchDistanceRef.current;
+            const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, oldZoom * scale));
+            
+            // 2. Pan + Zoom Offset Correction
+            // We want the world point that was under the PREVIOUS pinch center
+            // to move to under the CURRENT pinch center (handling both pan and zoom).
+            
+            const lastCenter = lastPinchCenterRef.current;
+            
+            // World coordinates of the previous center
+            const worldX = (lastCenter.x - oldOffset.x) / oldZoom;
+            const worldY = (lastCenter.y - oldOffset.y) / oldZoom;
+            
+            // New offset so that worldX, worldY maps to cx, cy
+            // Screen = World * Zoom + Offset  =>  Offset = Screen - World * Zoom
+            const newOffsetX = cx - worldX * newZoom;
+            const newOffsetY = cy - worldY * newZoom;
+            
+            return {
+                zoom: newZoom,
+                offset: { x: newOffsetX, y: newOffsetY }
+            };
+          });
+      }
+      
+      lastTouchDistanceRef.current = dist;
+      lastPinchCenterRef.current = { x: cx, y: cy };
     }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (e.changedTouches.length > 0) {
-        handleEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+    if (e.touches.length === 0) {
+        // All fingers lifted
+        if (e.changedTouches.length > 0) {
+            handleEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+        }
+        isDraggingRef.current = false;
+        isCreatingRef.current = false;
+    } else if (e.touches.length === 1) {
+        // Transited from 2 fingers to 1 finger
+        // We treat this as a reset for single-finger pan to avoid jumps
+        const t = e.touches[0];
+        lastMousePosRef.current = { x: t.clientX, y: t.clientY };
+        
+        // Ensure we don't accidentally create objects if we were in create mode before pinching
+        isCreatingRef.current = false; 
+        
+        // Allow resuming pan if we are in VIEW mode
+        isDraggingRef.current = interactionMode === InteractionMode.VIEW;
     }
   };
 
@@ -383,12 +547,15 @@ const Canvas: React.FC<CanvasProps> = ({
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onMouseLeave={() => { isDraggingRef.current = false; }}
+      onMouseLeave={() => { 
+          isDraggingRef.current = false; 
+          isCreatingRef.current = false; // Cancel creation if leaving canvas
+      }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onWheel={handleWheel}
-      className="absolute top-0 left-0 w-full h-full cursor-move touch-none"
+      className={`absolute top-0 left-0 w-full h-full touch-none ${interactionMode === InteractionMode.CREATE ? 'cursor-crosshair' : 'cursor-move'}`}
     />
   );
 };

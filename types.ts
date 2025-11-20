@@ -40,3 +40,8 @@ export enum SimulationState {
   PAUSED,
   RUNNING,
 }
+
+export enum InteractionMode {
+  VIEW = 'VIEW',
+  CREATE = 'CREATE',
+}
