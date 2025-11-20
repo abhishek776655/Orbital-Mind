@@ -115,11 +115,11 @@ const Controls: React.FC<ControlsProps> = ({
 
   return (
     <>
-      {/* --- MOBILE HEADER & TOGGLES --- */}
+      {/* --- MOBILE HEADER (Top Left) --- */}
       <div className="md:hidden absolute top-4 left-4 z-50 pointer-events-auto">
         <button 
             onClick={() => setIsMobileMenuOpen(true)}
-            className="p-3 bg-slate-800/80 backdrop-blur text-white rounded-full shadow-lg border border-white/10"
+            className="p-3 bg-slate-800/80 backdrop-blur text-white rounded-full shadow-lg border border-white/10 hover:bg-slate-700 transition-colors"
         >
             <Menu size={20} />
         </button>
@@ -172,7 +172,7 @@ const Controls: React.FC<ControlsProps> = ({
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
 
         /* Desktop Styles override */
-        md:absolute md:top-6 md:right-6 md:left-auto md:bottom-auto md:w-64 md:h-auto md:max-h-[80vh] 
+        md:absolute md:top-6 md:right-6 md:left-auto md:bottom-auto md:w-64 md:h-auto md:max-h-[75vh] 
         md:bg-black/80 md:rounded-xl md:border md:border-white/10 
         md:translate-x-0 
         md:opacity-40 md:hover:opacity-100 md:transition-opacity md:duration-300
@@ -227,7 +227,7 @@ const Controls: React.FC<ControlsProps> = ({
             >
                 <RotateCcw size={18} />
             </button>
-             {/* Mode Toggle Mobile */}
+             {/* Mode Toggle Mobile Floating */}
             <div className="w-px h-8 bg-white/10 mx-1"></div>
             <button
                 onClick={onToggleMode}
@@ -330,12 +330,25 @@ const Controls: React.FC<ControlsProps> = ({
                 {/* Left Column: Physics, Trails & Waves */}
                 <div className="flex flex-col gap-5">
                     {/* Mobile View Controls (Only visible on mobile) */}
-                    <div className="md:hidden flex items-center justify-between bg-white/5 p-2 rounded-lg border border-white/5 mb-2">
-                        <span className="text-xs font-bold text-slate-400 uppercase ml-2">Zoom View</span>
-                        <div className="flex items-center gap-2">
-                            <button onClick={handleZoomIn} className="p-2 bg-white/10 rounded text-cyan-400"><ZoomIn size={16} /></button>
-                            <button onClick={handleResetZoom} className="p-2 bg-white/10 rounded text-slate-400"><Scan size={16} /></button>
-                            <button onClick={handleZoomOut} className="p-2 bg-white/10 rounded text-cyan-400"><ZoomOut size={16} /></button>
+                    <div className="md:hidden grid grid-cols-2 gap-3 mb-2">
+                         {/* Mode Toggle */}
+                        <button
+                            onClick={onToggleMode}
+                            className={`flex items-center justify-center gap-2 p-2 rounded-lg border border-white/5 transition-all ${
+                                interactionMode === InteractionMode.CREATE 
+                                ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' 
+                                : 'bg-white/5 text-slate-400'
+                            }`}
+                        >
+                            {interactionMode === InteractionMode.CREATE ? <PlusCircle size={16} /> : <MousePointer2 size={16} />}
+                            <span className="text-xs font-bold uppercase">{interactionMode === InteractionMode.CREATE ? 'Create' : 'View'}</span>
+                        </button>
+
+                         {/* Zoom Controls Wrapper */}
+                         <div className="flex items-center justify-center gap-1 bg-white/5 p-1 rounded-lg border border-white/5">
+                            <button onClick={handleZoomIn} className="p-1.5 hover:bg-white/10 rounded text-cyan-400"><ZoomIn size={16} /></button>
+                            <button onClick={handleResetZoom} className="p-1.5 hover:bg-white/10 rounded text-slate-400"><Scan size={16} /></button>
+                            <button onClick={handleZoomOut} className="p-1.5 hover:bg-white/10 rounded text-cyan-400"><ZoomOut size={16} /></button>
                         </div>
                     </div>
 
